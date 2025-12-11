@@ -27,3 +27,35 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Ant Design Vue 组件样式补充 */
+.ant-layout {
+  min-height: 100vh;
+}
+
+.ant-layout-header {
+  height: 64px;
+  line-height: 64px;
+  padding: 0 16px;
+}
+
+.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-btn-text {
+  padding: 4px 8px;
+}
+
+.ant-btn .anticon {
+  line-height: 1;
+}
+
+/* 确保图标正确对齐 */
+.anticon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

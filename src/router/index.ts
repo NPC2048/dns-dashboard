@@ -3,10 +3,10 @@ import type { RouteRecordRaw } from 'vue-router'
 
 // 页面组件（稍后创建）
 import HomePage from '@/views/HomePage.vue'
-import AntdDemo from '@/components/AntdDemo.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import CacheManagement from '@/views/CacheManagement.vue'
 import Configuration from '@/views/Configuration.vue'
+import DnsTest from '@/views/DnsTest.vue'
 
 // 路由配置
 const routes: RouteRecordRaw[] = [
@@ -16,14 +16,6 @@ const routes: RouteRecordRaw[] = [
     component: HomePage,
     meta: {
       title: '首页 - DNS 服务器管理'
-    }
-  },
-  {
-    path: '/demo',
-    name: 'Demo',
-    component: AntdDemo,
-    meta: {
-      title: 'Ant Design Vue Demo'
     }
   },
   {
@@ -48,6 +40,14 @@ const routes: RouteRecordRaw[] = [
     component: Configuration,
     meta: {
       title: '系统配置'
+    }
+  },
+  {
+    path: '/dns-test',
+    name: 'DnsTest',
+    component: DnsTest,
+    meta: {
+      title: 'DNS服务测试'
     }
   },
   {

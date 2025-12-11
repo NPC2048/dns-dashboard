@@ -1,47 +1,81 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import {
+  SaveOutlined,
+  UndoOutlined,
+  ExportOutlined,
+  ImportOutlined,
+  PoweroffOutlined,
+  WifiOutlined
+} from '@ant-design/icons-vue'
+import { getDnsConfig, updateDnsConfig, testUpstreamDns } from '@/api/dns'
 
 const router = useRouter()
 
 // 配置表单
 const configForm = reactive({
   // 上游 DNS 配置
-  upstreamDns: ['8.8.8.8', '8.8.4.4', '114.114.114.114'],
-  dnsTimeout: 5000,
+  upstreamDns: [
+    { address: '8.8.8.8', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 1 },
+    { address: '8.8.4.4', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 2 },
+    { address: '114.114.114.114', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 3 }
+  ] as Array<{
+    address: string
+    port?: number
+    timeout?: number
+    useProxy?: boolean
+    proxyConfig?: {
+      host: string
+      port?: number
+      type?: string
+      username?: string
+      password?: string
+    }
+    enabled?: boolean
+    priority?: number
+  }>,
+  defaultTimeout: 5000,
   retryCount: 3,
 
   // 缓存配置
   cacheEnabled: true,
-  cacheSize: 10000,
-  defaultTtl: 3600,
-  cacheCleanInterval: 300,
+  cacheMaxSize: 10000,
+  cacheDefaultTtl: 300,
 
   // 网络配置
-  listenPort: 53,
-  listenAddress: '0.0.0.0',
-  maxConnections: 1000,
+  listenPort: 5354,
 
   // 日志配置
-  logLevel: 'INFO',
-  logToFile: true,
-  logFilePath: './logs/dns-server.log',
-  logMaxSize: 100,
-
-  // 安全配置
-  enableRateLimit: true,
-  maxQueriesPerSecond: 100,
-  blacklistEnabled: false,
-  whitelistEnabled: false,
+  queryLogEnabled: true,
 })
 
 // 新增上游 DNS
 const newUpstreamDns = ref('')
+const newUpstreamPort = ref(53)
+const newUpstreamTimeout = ref(5000)
+const newUpstreamUseProxy = ref(false)
 
 const addUpstreamDns = () => {
-  if (newUpstreamDns.value && !configForm.upstreamDns.includes(newUpstreamDns.value)) {
-    configForm.upstreamDns.push(newUpstreamDns.value)
-    newUpstreamDns.value = ''
+  if (newUpstreamDns.value) {
+    const exists = configForm.upstreamDns.some(dns => dns.address === newUpstreamDns.value)
+    if (!exists) {
+      configForm.upstreamDns.push({
+        address: newUpstreamDns.value,
+        port: newUpstreamPort.value,
+        timeout: newUpstreamTimeout.value,
+        useProxy: newUpstreamUseProxy.value,
+        enabled: true,
+        priority: configForm.upstreamDns.length + 1
+      })
+      newUpstreamDns.value = ''
+      newUpstreamPort.value = 53
+      newUpstreamTimeout.value = 5000
+      newUpstreamUseProxy.value = false
+    } else {
+      message.warning('该 DNS 服务器已存在')
+    }
   }
 }
 
@@ -49,46 +83,130 @@ const removeUpstreamDns = (index: number) => {
   configForm.upstreamDns.splice(index, 1)
 }
 
+// 编辑上游 DNS 的代理配置
+const editingProxyIndex = ref<number | null>(null)
+const proxyConfigForm = reactive({
+  host: '',
+  port: 8080,
+  type: 'HTTP',
+  username: '',
+  password: ''
+})
+
+const editProxyConfig = (index: number) => {
+  editingProxyIndex.value = index
+  const dns = configForm.upstreamDns[index]
+  if (dns.proxyConfig) {
+    proxyConfigForm.host = dns.proxyConfig.host || ''
+    proxyConfigForm.port = dns.proxyConfig.port || 8080
+    proxyConfigForm.type = dns.proxyConfig.type || 'HTTP'
+    proxyConfigForm.username = dns.proxyConfig.username || ''
+    proxyConfigForm.password = dns.proxyConfig.password || ''
+  } else {
+    proxyConfigForm.host = ''
+    proxyConfigForm.port = 8080
+    proxyConfigForm.type = 'HTTP'
+    proxyConfigForm.username = ''
+    proxyConfigForm.password = ''
+  }
+}
+
+const saveProxyConfig = () => {
+  if (editingProxyIndex.value !== null) {
+    configForm.upstreamDns[editingProxyIndex.value].proxyConfig = {
+      host: proxyConfigForm.host,
+      port: proxyConfigForm.port,
+      type: proxyConfigForm.type,
+      username: proxyConfigForm.username,
+      password: proxyConfigForm.password
+    }
+    editingProxyIndex.value = null
+    message.success('代理配置已保存')
+  }
+}
+
+const cancelProxyConfig = () => {
+  editingProxyIndex.value = null
+}
+
 // 表单提交
 const loading = ref(false)
 
-const handleSubmit = () => {
-  loading.value = true
-  // 模拟保存配置
-  setTimeout(() => {
+// 加载配置
+onMounted(async () => {
+  try {
+    loading.value = true
+    const config = await getDnsConfig()
+    Object.assign(configForm, config)
+    message.success('配置加载成功')
+  } catch (error) {
+    console.error('加载配置失败:', error)
+    message.error('加载配置失败，使用默认配置')
+  } finally {
     loading.value = false
+  }
+})
+
+const handleSubmit = async () => {
+  try {
+    loading.value = true
+    await updateDnsConfig(configForm)
     message.success('配置保存成功！')
-  }, 1000)
+  } catch (error) {
+    console.error('保存配置失败:', error)
+    message.error('保存配置失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleReset = () => {
   // 重置为默认值
   Object.assign(configForm, {
-    upstreamDns: ['8.8.8.8', '8.8.4.4', '114.114.114.114'],
-    dnsTimeout: 5000,
+    upstreamDns: [
+      { address: '8.8.8.8', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 1 },
+      { address: '8.8.4.4', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 2 },
+      { address: '114.114.114.114', port: 53, timeout: 5000, useProxy: false, enabled: true, priority: 3 }
+    ],
+    defaultTimeout: 5000,
     retryCount: 3,
     cacheEnabled: true,
-    cacheSize: 10000,
-    defaultTtl: 3600,
-    cacheCleanInterval: 300,
-    listenPort: 53,
-    listenAddress: '0.0.0.0',
-    maxConnections: 1000,
-    logLevel: 'INFO',
-    logToFile: true,
-    logFilePath: './logs/dns-server.log',
-    logMaxSize: 100,
-    enableRateLimit: true,
-    maxQueriesPerSecond: 100,
-    blacklistEnabled: false,
-    whitelistEnabled: false,
+    cacheMaxSize: 10000,
+    cacheDefaultTtl: 300,
+    listenPort: 5354,
+    queryLogEnabled: true,
   })
   message.info('配置已重置为默认值')
 }
 
-const handleTestConnection = () => {
-  message.loading('测试上游 DNS 连接中...', 2)
-    .then(() => message.success('所有上游 DNS 连接测试通过！'))
+const handleTestConnection = async () => {
+  const hide = message.loading('测试上游 DNS 连接中...', 0)
+
+  try {
+    // 测试第一个上游 DNS
+    const firstDns = configForm.upstreamDns[0]
+    if (!firstDns) {
+      throw new Error('没有配置上游 DNS')
+    }
+
+    const result = await testUpstreamDns({
+      domain: 'google.com',
+      address: firstDns.address,
+      port: firstDns.port,
+      useProxy: firstDns.useProxy
+    })
+
+    hide()
+    if (result.success) {
+      message.success('上游 DNS 连接测试通过！')
+    } else {
+      message.warning('上游 DNS 连接测试失败')
+    }
+  } catch (error) {
+    hide()
+    console.error('测试连接失败:', error)
+    message.error('测试连接失败')
+  }
 }
 
 const navigateTo = (path: string) => {
@@ -125,31 +243,98 @@ const navigateTo = (path: string) => {
           >
             <a-form-item label="上游 DNS 服务器">
               <a-space direction="vertical" style="width: 100%">
-                <a-space v-for="(dns, index) in configForm.upstreamDns" :key="index">
-                  <a-input :value="dns" disabled style="width: 200px" />
-                  <a-button
-                    type="link"
-                    danger
-                    @click="removeUpstreamDns(index)"
-                  >
-                    删除
-                  </a-button>
-                </a-space>
-                <a-space>
-                  <a-input
-                    v-model:value="newUpstreamDns"
-                    placeholder="输入新的上游 DNS 服务器 IP"
-                    style="width: 200px"
-                    @press-enter="addUpstreamDns"
-                  />
-                  <a-button @click="addUpstreamDns">添加</a-button>
-                </a-space>
+                <a-table
+                  :data-source="configForm.upstreamDns"
+                  :pagination="false"
+                  size="small"
+                  style="width: 100%"
+                >
+                  <a-table-column title="地址" data-index="address" key="address" />
+                  <a-table-column title="端口" data-index="port" key="port">
+                    <template #default="{ record }">
+                      {{ record.port || 53 }}
+                    </template>
+                  </a-table-column>
+                  <a-table-column title="超时" data-index="timeout" key="timeout">
+                    <template #default="{ record }">
+                      {{ record.timeout || 5000 }}ms
+                    </template>
+                  </a-table-column>
+                  <a-table-column title="代理" data-index="useProxy" key="useProxy">
+                    <template #default="{ record }">
+                      <a-tag :color="record.useProxy ? 'blue' : 'default'">
+                        {{ record.useProxy ? '使用代理' : '直连' }}
+                      </a-tag>
+                    </template>
+                  </a-table-column>
+                  <a-table-column title="状态" data-index="enabled" key="enabled">
+                    <template #default="{ record }">
+                      <a-tag :color="record.enabled ? 'green' : 'red'">
+                        {{ record.enabled ? '启用' : '禁用' }}
+                      </a-tag>
+                    </template>
+                  </a-table-column>
+                  <a-table-column title="操作" key="action">
+                    <template #default="{ index }">
+                      <a-space>
+                        <a-button
+                          type="link"
+                          size="small"
+                          @click="editProxyConfig(index)"
+                          v-if="configForm.upstreamDns[index].useProxy"
+                        >
+                          代理配置
+                        </a-button>
+                        <a-button
+                          type="link"
+                          danger
+                          size="small"
+                          @click="removeUpstreamDns(index)"
+                        >
+                          删除
+                        </a-button>
+                      </a-space>
+                    </template>
+                  </a-table-column>
+                </a-table>
+
+                <a-card title="添加上游 DNS" size="small" style="margin-top: 16px">
+                  <a-space>
+                    <a-input
+                      v-model:value="newUpstreamDns"
+                      placeholder="DNS 服务器地址"
+                      style="width: 150px"
+                    />
+                    <a-input-number
+                      v-model:value="newUpstreamPort"
+                      placeholder="端口"
+                      :min="1"
+                      :max="65535"
+                      style="width: 100px"
+                    />
+                    <a-input-number
+                      v-model:value="newUpstreamTimeout"
+                      placeholder="超时"
+                      :min="1000"
+                      :max="30000"
+                      :step="1000"
+                      style="width: 120px"
+                      addon-after="ms"
+                    />
+                    <a-checkbox v-model:checked="newUpstreamUseProxy">
+                      使用代理
+                    </a-checkbox>
+                    <a-button @click="addUpstreamDns" type="primary">
+                      添加
+                    </a-button>
+                  </a-space>
+                </a-card>
               </a-space>
             </a-form-item>
 
             <a-form-item label="DNS 查询超时">
               <a-input-number
-                v-model:value="configForm.dnsTimeout"
+                v-model:value="configForm.defaultTimeout"
                 :min="1000"
                 :max="30000"
                 :step="1000"
@@ -189,7 +374,7 @@ const navigateTo = (path: string) => {
 
             <a-form-item label="缓存大小限制">
               <a-input-number
-                v-model:value="configForm.cacheSize"
+                v-model:value="configForm.cacheMaxSize"
                 :min="1000"
                 :max="100000"
                 :step="1000"
@@ -199,19 +384,9 @@ const navigateTo = (path: string) => {
 
             <a-form-item label="默认 TTL">
               <a-input-number
-                v-model:value="configForm.defaultTtl"
+                v-model:value="configForm.cacheDefaultTtl"
                 :min="60"
                 :max="86400"
-                :step="60"
-                addon-after="秒"
-              />
-            </a-form-item>
-
-            <a-form-item label="缓存清理间隔">
-              <a-input-number
-                v-model:value="configForm.cacheCleanInterval"
-                :min="60"
-                :max="3600"
                 :step="60"
                 addon-after="秒"
               />
@@ -236,18 +411,6 @@ const navigateTo = (path: string) => {
               />
             </a-form-item>
 
-            <a-form-item label="监听地址">
-              <a-input v-model:value="configForm.listenAddress" />
-            </a-form-item>
-
-            <a-form-item label="最大连接数">
-              <a-input-number
-                v-model:value="configForm.maxConnections"
-                :min="100"
-                :max="10000"
-                :step="100"
-              />
-            </a-form-item>
           </a-form>
         </a-card>
       </a-tab-pane>
@@ -260,68 +423,13 @@ const navigateTo = (path: string) => {
             :wrapper-col="{ span: 16 }"
             style="max-width: 800px"
           >
-            <a-form-item label="日志级别">
-              <a-select v-model:value="configForm.logLevel">
-                <a-select-option value="DEBUG">DEBUG</a-select-option>
-                <a-select-option value="INFO">INFO</a-select-option>
-                <a-select-option value="WARN">WARN</a-select-option>
-                <a-select-option value="ERROR">ERROR</a-select-option>
-              </a-select>
-            </a-form-item>
-
-            <a-form-item label="输出到文件">
-              <a-switch v-model:checked="configForm.logToFile" />
-            </a-form-item>
-
-            <a-form-item label="日志文件路径">
-              <a-input v-model:value="configForm.logFilePath" />
-            </a-form-item>
-
-            <a-form-item label="日志文件最大大小">
-              <a-input-number
-                v-model:value="configForm.logMaxSize"
-                :min="10"
-                :max="1000"
-                :step="10"
-                addon-after="MB"
-              />
+            <a-form-item label="启用查询日志">
+              <a-switch v-model:checked="configForm.queryLogEnabled" />
             </a-form-item>
           </a-form>
         </a-card>
       </a-tab-pane>
 
-      <a-tab-pane key="5" tab="安全配置">
-        <a-card>
-          <a-form
-            :model="configForm"
-            :label-col="{ span: 8 }"
-            :wrapper-col="{ span: 16 }"
-            style="max-width: 800px"
-          >
-            <a-form-item label="启用速率限制">
-              <a-switch v-model:checked="configForm.enableRateLimit" />
-            </a-form-item>
-
-            <a-form-item label="最大 QPS">
-              <a-input-number
-                v-model:value="configForm.maxQueriesPerSecond"
-                :min="10"
-                :max="1000"
-                :step="10"
-                addon-after="次/秒"
-              />
-            </a-form-item>
-
-            <a-form-item label="启用黑名单">
-              <a-switch v-model:checked="configForm.blacklistEnabled" />
-            </a-form-item>
-
-            <a-form-item label="启用白名单">
-              <a-switch v-model:checked="configForm.whitelistEnabled" />
-            </a-form-item>
-          </a-form>
-        </a-card>
-      </a-tab-pane>
     </a-tabs>
 
     <a-card style="margin-top: 24px">
@@ -363,6 +471,44 @@ const navigateTo = (path: string) => {
         style="margin-top: 16px"
       />
     </a-card>
+
+    <!-- 代理配置模态框 -->
+    <a-modal
+      :open="editingProxyIndex !== null"
+      title="代理配置"
+      @ok="saveProxyConfig"
+      @cancel="cancelProxyConfig"
+    >
+      <a-form
+        :model="proxyConfigForm"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+      >
+        <a-form-item label="代理主机">
+          <a-input v-model:value="proxyConfigForm.host" placeholder="例如: proxy.example.com" />
+        </a-form-item>
+        <a-form-item label="代理端口">
+          <a-input-number
+            v-model:value="proxyConfigForm.port"
+            :min="1"
+            :max="65535"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="代理类型">
+          <a-select v-model:value="proxyConfigForm.type">
+            <a-select-option value="HTTP">HTTP 代理</a-select-option>
+            <a-select-option value="SOCKS5">SOCKS5 代理</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="用户名">
+          <a-input v-model:value="proxyConfigForm.username" placeholder="可选" />
+        </a-form-item>
+        <a-form-item label="密码">
+          <a-input-password v-model:value="proxyConfigForm.password" placeholder="可选" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 

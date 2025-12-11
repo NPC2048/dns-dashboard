@@ -56,10 +56,10 @@ const menuItems = [
     title: '系统配置',
   },
   {
-    key: '/demo',
+    key: '/dns-test',
     icon: () => h(CodeOutlined),
-    label: '组件演示',
-    title: '组件演示',
+    label: 'DNS测试',
+    title: 'DNS服务测试',
   },
 ]
 
@@ -91,28 +91,20 @@ const handleMenuClick = ({ key }: { key: string }) => {
     <a-layout>
       <!-- 头部 -->
       <a-layout-header style="background: #fff; padding: 0 16px">
-        <div style="display: flex; align-items: center; justify-content: space-between">
-          <div>
+        <div class="header-content">
+          <div class="header-left">
             <a-button
               type="text"
               @click="collapsed = !collapsed"
-              :icon="collapsed ? MenuUnfoldOutlined : MenuFoldOutlined"
-            />
-            <span style="margin-left: 16px; font-size: 16px; font-weight: 500">
+              class="collapse-btn"
+            >
+              <template #icon>
+                <component :is="collapsed ? MenuUnfoldOutlined : MenuFoldOutlined" />
+              </template>
+            </a-button>
+            <span class="header-title">
               {{ route.meta?.title || 'DNS 服务器管理' }}
             </span>
-          </div>
-          <div>
-            <a-space>
-              <a-button type="text" @click="() => router.push('/')">
-                <template #icon><HomeOutlined /></template>
-                首页
-              </a-button>
-              <a-button type="text" @click="() => router.push('/demo')">
-                <template #icon><CodeOutlined /></template>
-                组件演示
-              </a-button>
-            </a-space>
           </div>
         </div>
       </a-layout-header>
@@ -149,5 +141,60 @@ const handleMenuClick = ({ key }: { key: string }) => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+/* 头部样式 */
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  flex-shrink: 0;
+}
+
+/* 确保按钮图标正确显示 */
+.ant-btn-text .anticon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 防止布局溢出 */
+.ant-layout-header {
+  overflow: hidden;
+}
+
+/* 确保按钮内容不换行 */
+.ant-btn-text {
+  white-space: nowrap;
 }
 </style>

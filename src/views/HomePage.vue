@@ -63,20 +63,6 @@ const navigateTo = (path: string) => {
         </a-card>
       </a-col>
 
-      <a-col :span="6">
-        <a-card hoverable @click="navigateTo('/demo')">
-          <template #cover>
-            <div style="padding: 20px; text-align: center">
-              <code-outlined style="font-size: 48px; color: #fa8c16" />
-            </div>
-          </template>
-          <a-card-meta title="组件演示" description="Ant Design Vue 组件示例">
-            <template #avatar>
-              <code-outlined />
-            </template>
-          </a-card-meta>
-        </a-card>
-      </a-col>
     </a-row>
 
     <a-divider>系统信息</a-divider>
