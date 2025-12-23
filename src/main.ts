@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
 
@@ -13,6 +14,10 @@ import * as Icons from '@ant-design/icons-vue'
 import router from './router'
 
 const app = createApp(App)
+
+// 注册 Pinia
+const pinia = createPinia()
+app.use(pinia)
 
 // 注册 Ant Design Vue
 app.use(Antd)

@@ -1,8 +1,9 @@
 import axios from 'axios'
+import type { LoginRequest, LoginResponse } from '@/types/auth'
 // import type { AxiosResponse } from 'axios'
 
 // 创建 axios 实例
-const api = axios.create({
+export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5381/api',
   timeout: 10000,
   headers: {
@@ -27,13 +28,18 @@ api.interceptors.request.use(
 // 响应拦截器：处理错误
 api.interceptors.response.use(
   (response) => {
+    // 检查是否是SaResult错误格式（code === 500）
+    if (response.data?.code === 500) {
+      return Promise.reject(new Error(response.data.msg))
+    }
     return response.data
   },
   (error) => {
     if (error.response?.status === 401) {
       // 未授权，跳转到登录页
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      const currentPath = window.location.pathname + window.location.search
+      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`
     }
     return Promise.reject(error)
   }
@@ -137,11 +143,39 @@ export async function queryDns(domain: string): Promise<DnsQueryResult> {
   return response.data
 }
 
+/**
+ * 用户登录
+ * @param request 登录请求
+ * @returns 登录响应（含token）
+ */
+export async function login(request: LoginRequest): Promise<LoginResponse> {
+  const response = await api.post('/auth/login', request)
+  return response.data
+}
+
+/**
+ * 用户登出
+ */
+export async function logout(): Promise<void> {
+  await api.post('/auth/logout')
+}
+
+/**
+ * 获取当前用户信息
+ */
+export async function getCurrentUser(): Promise<LoginResponse> {
+  const response = await api.get('/auth/current')
+  return response.data
+}
+
 export default {
   getDnsConfig,
   updateDnsConfig,
   testUpstreamDns,
   getCacheStats,
   clearCache,
-  queryDns
+  queryDns,
+  login,
+  logout,
+  getCurrentUser
 }
